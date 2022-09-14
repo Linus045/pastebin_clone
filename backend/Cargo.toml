@@ -1,0 +1,15 @@
+[package]
+name = "copy_me"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-cors = "0.6.2"
+actix-web = "4.1.0"
+tokio = {version = "1.21", features = ["rt"]}
+tokio-postgres = { version = "0.7.7", features = ["with-chrono-0_4"]}
+rand = "0.8.5"
+serde = {version = "1.0.142", features = ["derive"]}
+chrono = {version = "0.4", features = ["serde"]}
