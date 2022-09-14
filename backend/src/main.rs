@@ -62,6 +62,7 @@ async fn create_paste(
     let cur_datetime = chrono::Utc::now();
 
     let rows = match db_client
+        .clone()
         .lock()
         .await
         .execute(
@@ -103,8 +104,10 @@ async fn get_pastes(
 ) -> Result<Json<PasteResponses>, actix_web::Error> {
     eprintln!("/pastes was called");
     let mut pastes = Vec::new();
-    let db_client = &db_client.lock().await;
     match db_client
+        .clone()
+        .lock()
+        .await
         .query(
             "SELECT uniqueHash, title, creation_date, click_count
                 FROM pastes
@@ -114,6 +117,7 @@ async fn get_pastes(
         .await
     {
         Ok(rows) => {
+            eprintln!("Received rows: {}", rows.len());
             rows.iter().for_each(|row| {
                 let res = PasteResponse {
                     hash: row.get(0),
@@ -154,9 +158,10 @@ async fn get_paste(
 ) -> Result<Json<PasteResponse>, actix_web::error::Error> {
     println!("/paste/{hash} was called");
     let response: PasteResponse;
-    let client = db_client.lock().await;
     let hash2 = String::clone(&hash);
-    let affected_rows = client
+    let affected_rows = db_client
+        .lock()
+        .await
         .query(
             "SELECT uniqueHash, title, data, creation_date, click_count
                 FROM pastes
@@ -198,7 +203,7 @@ async fn create_db_client(
 
 fn get_database_config() -> String {
     // TODO: Move into some kind of .env file
-    let postgres_database_name = "paste_db";
+    let postgres_database_name = "paste_db_new";
     let postgres_username = "db_user";
     let postgres_hostname = "localhost";
     let postgres_port = "5432";
@@ -245,7 +250,7 @@ async fn main() -> std::io::Result<()> {
                     title    TEXT NOT NULL,
                     data    TEXT NOT NULL,
                     creation_date TIMESTAMP WITH TIME ZONE,
-                    click_count INTEGER)",
+                    click_count INTEGER NOT NULL DEFAULT 0)",
             &[],
         )
         .await;
@@ -257,7 +262,9 @@ async fn main() -> std::io::Result<()> {
         Err(err) => {
             eprintln!("Error while creating table: {}", err);
         }
-    };
+    }
+    // manually release lock here, since the lifetime of db_lock exceeds the listening server's lifetime and therefore would keep the lock permanently
+    drop(db_lock);
 
     eprintln!(
         "Starting backend server. Listening on {}:{}",
@@ -280,7 +287,6 @@ async fn main() -> std::io::Result<()> {
             .allow_any_method()
             .allow_any_header();
 
-        eprintln!("Creating backend server");
         App::new()
             .app_data(json_config)
             .app_data(web::Data::new(database_client))
